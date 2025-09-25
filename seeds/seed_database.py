@@ -30,26 +30,26 @@ async def create_search_index():
             await db.create_collection("products")
 
         collection = Database.get_collection("products")
-        await collection.drop_indexes()
+        try:
+            print("Dropping existing search index...")
+            await collection.drop_search_index("vector_index")
+        except Exception as e:
+            print(f"Could not drop index 'vector_index' (it may not exist): {e}")
 
-        search_index_definition = {
-            "name": "vector_index",
-            "type": "vectorSearch",
-            "definition": {
-                "mappings": {
-                    "dynamic": True,
-                    "fields": [
-                        {
-                            "type": "vector",
-                            "path": "embedding",
-                            "numDimensions": 768,
-                            "similarity": "cosine",
-                        }
-                    ],
-                }
+        search_index_model = SearchIndexModel(
+            name="vector_index",
+            type="vectorSearch",
+            definition={
+                "fields": [
+                    {
+                        "type": "vector",
+                        "path": "embedding",
+                        "numDimensions": 768,
+                        "similarity": "cosine",
+                    }
+                ]
             },
-        }
-        search_index_model = SearchIndexModel(search_index_definition)
+        )
         print("Creating search index...")
         await collection.create_search_indexes([search_index_model])
     except Exception as e:
