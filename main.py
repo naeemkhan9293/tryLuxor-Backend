@@ -8,6 +8,7 @@ from routes import chat_route
 from libs.database import Database
 import os
 from dotenv import load_dotenv
+from routes.product import router as product_router
 
 load_dotenv()
 
@@ -40,3 +41,4 @@ async def seed_db():
 
 
 app.include_router(chat_route.router, prefix="/chat", tags=["chat"])
+app.include_router(product_router, prefix="/products", tags=["products"])
