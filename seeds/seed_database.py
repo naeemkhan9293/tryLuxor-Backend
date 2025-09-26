@@ -2,8 +2,6 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from libs.database import Database
 from models.products_model import Product, ProductsList
-from starlette.responses import JSONResponse
-import asyncio
 import os
 from langchain_core.documents import Document
 from pydantic import SecretStr
