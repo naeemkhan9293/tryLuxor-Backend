@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 @router.post("", tags=["chat"])
-async def chat_endpoint():
+async def chat_endpoint(): 
     return JSONResponse(content={"message": "Chat endpoint is working"})
 
 
