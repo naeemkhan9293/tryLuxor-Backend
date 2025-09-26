@@ -7,11 +7,15 @@ import uuid
 router = APIRouter()
 
 
+class ChatRequest(BaseModel):
+    message: str
+
+
 @router.post("", tags=["chat"])
-async def chat_endpoint(message: str):
+async def chat_endpoint(request: ChatRequest):
     try:
         thread_id = str(uuid.uuid4())
-        products = await chat_agent(thread_id=thread_id, message=message)
+        products = await chat_agent(thread_id=thread_id, message=request.message)
         return JSONResponse(content={"products": products})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
