@@ -20,6 +20,7 @@ embeddings = GoogleGenerativeAIEmbeddings(
     model="text-embedding-004", google_api_key=SecretStr(api_key) if api_key else None
 )
 
+
 @tool
 async def products_look_up(query: str, n: int = 10) -> list:
     """
@@ -88,7 +89,7 @@ async def chat_agent(thread_id: Optional[str] = None, message: Optional[str] = N
     if thread_id is None or message is None:
         raise ValueError("Thread ID and message are required")
     try:
-        llm = GoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
+        llm = GoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key)
         model_with_tools = llm.bind(tools=[products_look_up])
 
         system_message = SystemMessage(
@@ -99,7 +100,7 @@ async def chat_agent(thread_id: Optional[str] = None, message: Optional[str] = N
 
         ai_response = await model_with_tools.ainvoke(messages)
 
-        if hasattr(ai_response, 'tool_calls') and ai_response.tool_calls:
+        if hasattr(ai_response, "tool_calls") and ai_response.tool_calls:
             products = []
             for tool_call in ai_response.tool_calls:
                 if tool_call["name"] == "products_look_up":
@@ -109,7 +110,13 @@ async def chat_agent(thread_id: Optional[str] = None, message: Optional[str] = N
             return products
         else:
             # This is for debugging to see what's coming back
-            return [{"error": "No tool calls found or unexpected response", "response_type": str(type(ai_response)), "content": str(ai_response)}]
+            return [
+                {
+                    "error": "No tool calls found or unexpected response",
+                    "response_type": str(type(ai_response)),
+                    "content": str(ai_response),
+                }
+            ]
 
     except Exception as e:
         print(f"Error processing chat message: {e}")
