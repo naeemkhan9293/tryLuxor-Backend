@@ -254,10 +254,11 @@ async def chat_agent(thread_id: str, message: str):
         }
         final_state = graph.invoke(initial_state, config={"recursion_limit": 5})
         final_content = final_state["messages"][-1].content
-        logger.info(
+        print(final_content)
+        logger.warning(
             f"chat_agent: Agent invocation successful. Response: {final_content}"
         )
-        return final_content
+        return {"AI": final_content, "products": str(final_state["product_info"])}
     except Exception as e:
         logger.error(
             f"chat_agent: An error occurred during agent invocation for thread_id {thread_id}: {e}"

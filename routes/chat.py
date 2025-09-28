@@ -11,8 +11,8 @@ router = APIRouter()
 async def chat_endpoint(message: str):
     try:
         thread_id = str(uuid.uuid4())
-        products = await chat_agent(thread_id=thread_id, message=message)
-        return JSONResponse(content={"products": products})
+        result = await chat_agent(thread_id=thread_id, message=message)
+        return JSONResponse(content={"payload": result})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
