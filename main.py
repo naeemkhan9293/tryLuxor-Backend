@@ -4,21 +4,24 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
-from routes import chat_route
+
+# from routes import chat
 from libs.database import Database
-import os
-from dotenv import load_dotenv
+from libs.logger import get_logger
 from routes.product import router as product_router
 
-load_dotenv()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-    await Database.connect(MONGO_URI)
+    logger.info("Connecting to database...")
+    await Database.connect()
+    logger.info("Database connected.")
     yield
+    logger.info("Disconnecting from database...")
     await Database.disconnect()
+    logger.info("Database disconnected.")
 
 
 app = FastAPI(debug=True, lifespan=lifespan)
@@ -26,6 +29,7 @@ app = FastAPI(debug=True, lifespan=lifespan)
 
 @app.get("/")
 async def read_root():
+    logger.info("Root endpoint accessed.")
     return JSONResponse(content={"message": "Server is running"})
 
 
@@ -35,10 +39,12 @@ async def seed_db():
         from seeds.seed_database import seed_database
 
         await seed_database()
+        logger.info("Database seeded successfully.")
         return JSONResponse(content={"message": "Database seeded successfully"})
     except Exception as e:
+        logger.error(f"Error seeding database: {e}", exc_info=True)
         return HTTPException(status_code=500, detail=str(e))
 
 
-app.include_router(chat_route.router, prefix="/chat", tags=["chat"])
+# app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(product_router, prefix="/products", tags=["products"])

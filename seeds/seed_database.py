@@ -6,21 +6,25 @@ import os
 from langchain_core.documents import Document
 from pydantic import SecretStr
 from pymongo.operations import SearchIndexModel
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from libs.logger import get_logger
 
+logger = get_logger(__name__)
 
-api_key = os.getenv("GOOGLE_API_KEY")
+api_key = SecretStr(str(os.getenv("GOOGLE_API_KEY")))
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0.7,
-    google_api_key=SecretStr(api_key) if api_key else None,
+    google_api_key=api_key,
 )
 
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="text-embedding-004", google_api_key=SecretStr(api_key) if api_key else None
+    model="text-embedding-004", google_api_key=api_key
 )
 
 
 async def create_search_index():
+    logger.info("Creating search index...")
     try:
         db = Database.get_database()
         # Check if the collection exists before creating it
@@ -48,9 +52,21 @@ async def create_search_index():
                 ]
             },
         )
-        print("Creating search index...")
-        await collection.create_search_indexes([search_index_model])
+        collection = Database.get_sync_collection("products")
+        vector_store = MongoDBAtlasVectorSearch(
+            collection=collection,
+            embedding=GoogleGenerativeAIEmbeddings(
+                model="text-embedding-004", google_api_key=api_key
+            ),
+            type="vectorSearch",
+            index_name="vector_index",
+            relevance_score_fn="cosine",
+        )
+
+        logger.info("Successfully created search index")
+        vector_store.create_vector_search_index(dimensions=768)
     except Exception as e:
+        logger.error(f"Error creating search index: {e}")
         raise e
 
 
@@ -58,8 +74,9 @@ parser = PydanticOutputParser(pydantic_object=ProductsList)
 
 
 async def generate_synthetic_data() -> list[Product]:
+    logger.info("Generating synthetic data...")
     prompt = f"""
-    You are a helpful assistant that generates synthetic data for a vector database.
+    You are a helpful assistant that generates synthetic data for a furniture store.
     You are to generate 20 products with the following fields:
 
     id: int
@@ -115,11 +132,12 @@ async def generate_synthetic_data() -> list[Product]:
         raw_output = " ".join([str(part) for part in raw_output])
 
     parsed = parser.parse(str(raw_output))
+    logger.info("Successfully created synthetic data...")
     return parsed.root
 
 
 async def create_product_summary(product: Product) -> str:
-    print("Creating product summary...")
+    logger.info(f"creating product summary: {product.name}")
     manufacturer_details = (
         f"Made in {product.manufacturer.country}"
         if product.manufacturer and product.manufacturer.country
@@ -159,29 +177,42 @@ async def create_product_summary(product: Product) -> str:
 
 
 async def seed_database():
+    logger.info(f"Seeding database...")
     try:
-        print("Seeding database...")
         collection = Database.get_collection("products")
         await create_search_index()
         synthetic_data: list[Product] = await generate_synthetic_data()
 
         records_with_summary = [
             Document(
-                page_content=await create_product_summary(product),
-                metadata=product.model_dump(),
+                page_content=await create_product_summary(product), metadata=product
             )
             for product in synthetic_data
         ]
 
-        documents_to_insert = []
-        for record in records_with_summary:
-            product_data = record.metadata.copy()  # Start with product's dict
-            product_data["embedding_text"] = record.page_content
-            product_data["embedding"] = embeddings.embed_query(record.page_content)
-            documents_to_insert.append(product_data)
+        collection = Database.get_sync_collection("products")
+        vector_store = MongoDBAtlasVectorSearch(
+            collection=collection,
+            embedding=GoogleGenerativeAIEmbeddings(
+                model="text-embedding-004", google_api_key=api_key
+            ),
+            type="vectorSearch",
+            index_name="vector_index",
+            relevance_score_fn="cosine",
+        )
 
-        await collection.insert_many(documents_to_insert)
+        vector_store.add_documents(records_with_summary)
+
+        # documents_to_insert = []
+        # for record in records_with_summary:
+        #     product_data = record.metadata.copy()  # Start with product's dict
+        #     product_data["embedding_text"] = record.page_content
+        #     product_data["embedding"] = embeddings.embed_query(record.page_content)
+        #     documents_to_insert.append(product_data)
+
+        # await collection.insert_many(documents_to_insert)
 
         # return JSONResponse(content={"data": [item.dict() for item in data]})
     except Exception as e:
+        logger.error(f"Error seeding database: {e}")
         raise e
