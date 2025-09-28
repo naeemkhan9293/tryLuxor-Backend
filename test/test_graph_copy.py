@@ -6,10 +6,16 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from langgraph.graph import StateGraph, START, END, message
-from langgraph.types import Command
+
 import re
 from typing import TypedDict, Literal, Sequence, Annotated, Optional
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.tools import tool
 from langchain.agents import ToolNode
 from langchain_mongodb import MongoDBAtlasVectorSearch
@@ -49,7 +55,14 @@ def product_lookup(state: AgentState):
         query = "sofa"
         if query is None:
             state["product_info"] = "No Product found"
-            return {"messages": [ToolMessage(content="No Product found", tool_call_id="product_lookup_call")], "product_info": "No Product found"}
+            return {
+                "messages": [
+                    ToolMessage(
+                        content="No Product found", tool_call_id="product_lookup_call"
+                    )
+                ],
+                "product_info": "No Product found",
+            }
         collection = Database.get_sync_collection("products")
         vector_store = MongoDBAtlasVectorSearch(
             collection=collection,
@@ -62,10 +75,28 @@ def product_lookup(state: AgentState):
 
         result = vector_store.similarity_search_with_score(query=query)
 
-        print(result)
-        if len(result) > 0:
-            state["product_info"] = result
-            return {"messages": [ToolMessage(content=str(result), tool_call_id="product_lookup_call")], "product_info": result}
+        # Process vector search results: reconstruct Document objects without embeddings
+        processed_vector_results = []
+        for doc, score in result:
+            doc_metadata = (
+                doc.metadata.copy()
+            )  # Create a copy to avoid modifying original metadata
+            if "embedding" in doc_metadata:
+                del doc_metadata["embedding"]
+            new_doc = Document(page_content=doc.page_content, metadata=doc_metadata)
+            processed_vector_results.append((new_doc, score))
+
+        if len(processed_vector_results) > 0:
+            state["product_info"] = processed_vector_results
+            return {
+                "messages": [
+                    ToolMessage(
+                        content=str(processed_vector_results),
+                        tool_call_id="product_lookup_call",
+                    )
+                ],
+                "product_info": processed_vector_results,
+            }
 
         result = collection.find(
             {
@@ -76,21 +107,51 @@ def product_lookup(state: AgentState):
             }
         ).to_list()
 
-        print(result)
+        # Process regex search results: remove embeddings from each dictionary
+        processed_regex_results = []
+        for doc_dict in result:
+            if "embedding" in doc_dict:
+                doc_dict_copy = (
+                    doc_dict.copy()
+                )  # Create a copy to avoid modifying original
+                del doc_dict_copy["embedding"]
+                processed_regex_results.append(doc_dict_copy)
+            else:
+                processed_regex_results.append(doc_dict)
 
-        if len(result) > 0:
-            state["product_info"] = result
-            return {"messages": [ToolMessage(content=str(result), tool_call_id="product_lookup_call")], "product_info": result}
+        if len(processed_regex_results) > 0:
+            state["product_info"] = processed_regex_results
+            return {
+                "messages": [
+                    ToolMessage(
+                        content=str(processed_regex_results),
+                        tool_call_id="product_lookup_call",
+                    )
+                ],
+                "product_info": processed_regex_results,
+            }
 
         state["product_info"] = (
             "No products found. Please try again with a different query."
         )
-        return {"messages": [ToolMessage(content=state["product_info"], tool_call_id="product_lookup_call")], "product_info": state["product_info"]}
+        return {
+            "messages": [
+                ToolMessage(
+                    content=state["product_info"], tool_call_id="product_lookup_call"
+                )
+            ],
+            "product_info": state["product_info"],
+        }
 
     except Exception as e:
         logger.error(f"product_lookup: An error occurred during product lookup: {e}")
         error_message = f"Error: {e}"
-        return {"messages": [ToolMessage(content=error_message, tool_call_id="product_lookup_call")], "product_info": error_message}
+        return {
+            "messages": [
+                ToolMessage(content=error_message, tool_call_id="product_lookup_call")
+            ],
+            "product_info": error_message,
+        }
 
 
 def call_llm(state: AgentState) -> AgentState:
@@ -122,14 +183,20 @@ def call_llm(state: AgentState) -> AgentState:
             ]
         )
 
-        # logger.info(f"call_llm: Invoking LLM: {prompt}")
-
-        llm_response: str = llm.invoke( # Expecting a string response
-            prompt.format_messages(messages=state.get("messages"), time=current_time, agent_scratchpad=state.get("messages")[-1:] if state.get("messages") else [])
+        llm_response: str = llm.invoke(
+            prompt.format_messages(
+                messages=state.get("messages"),
+                time=current_time,
+                agent_scratchpad=(
+                    state.get("messages")[-1:] if state.get("messages") else []
+                ),
+            )
         )
         # print(llm_response)
         return {
-            "messages": [AIMessage(content=llm_response)], # Only return the new message
+            "messages": [
+                AIMessage(content=llm_response)
+            ],  # Only return the new message
             "llm_response": llm_response,
             "query": state.get("query"),
             "product_info": state.get("product_info"),
@@ -139,13 +206,15 @@ def call_llm(state: AgentState) -> AgentState:
         return state
 
 
-def should_continue(state: AgentState) -> Literal["product_lookup", "call_llm", "__end__"]:
+def should_continue(
+    state: AgentState,
+) -> Literal["product_lookup", "call_llm", "__end__"]:
     logger.info("should_continue: Checking if LLM wants to call a tool")
     messages = state["messages"]
     last_message = messages[-1]
     logger.debug(f"should_continue: Last message: {last_message}")
     if isinstance(last_message, AIMessage):
-        llm_response_content = str(last_message.content) # Convert to string
+        llm_response_content = str(last_message.content)  # Convert to string
         tool_call_pattern = r"TOOL_CALL: product_lookup\(query=\"(.*?)\"\)"
         match = re.search(tool_call_pattern, llm_response_content)
         if match:
@@ -153,30 +222,32 @@ def should_continue(state: AgentState) -> Literal["product_lookup", "call_llm", 
             state["query"] = query
             return "product_lookup"
         else:
-            return "__end__" # LLM responded without a tool call, so end.
+            return "__end__"  # LLM responded without a tool call, so end.
     elif isinstance(last_message, ToolMessage):
-        return "call_llm" # Tool just ran, call LLM to summarize/respond
-    
-    return "__end__" # Default to end if unexpected message type
+        return "call_llm"  # Tool just ran, call LLM to summarize/respond
+
+    return "__end__"  # Default to end if unexpected message type
 
 
 builder = StateGraph(AgentState)
 
 builder.add_node("call_llm", call_llm)
-builder.add_node("product_lookup", product_lookup) # Directly add the function as a node
+builder.add_node(
+    "product_lookup", product_lookup
+)  # Directly add the function as a node
 
 builder.add_edge(START, "call_llm")
 builder.add_conditional_edges(
     "call_llm",
     should_continue,
-    {"product_lookup": "product_lookup", "call_llm": "call_llm", "__end__": END}
+    {"product_lookup": "product_lookup", "call_llm": "call_llm", "__end__": END},
 )
 builder.add_edge("product_lookup", "call_llm")
 
 graph = builder.compile()
 
 
-mock_messages = [HumanMessage(content="Yoga Mat with Carrying Strap")]
+mock_messages = [HumanMessage(content="do you have any kind of sofa")]
 
 initial_state: AgentState = {
     "messages": mock_messages,
@@ -185,4 +256,6 @@ initial_state: AgentState = {
     "product_info": None,
 }
 final_state = graph.invoke(initial_state, config={"recursion_limit": 5})
-print("Final state:", final_state)
+
+for message in final_state["messages"]:
+    print(message)

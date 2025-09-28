@@ -5,7 +5,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
 
-# from routes import chat
+from routes import chat
 from libs.database import Database
 from libs.logger import get_logger
 from routes.product import router as product_router
@@ -46,5 +46,5 @@ async def seed_db():
         return HTTPException(status_code=500, detail=str(e))
 
 
-# app.include_router(chat.router, prefix="/chat", tags=["chat"])
+app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(product_router, prefix="/products", tags=["products"])
