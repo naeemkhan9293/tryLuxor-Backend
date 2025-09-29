@@ -1,6 +1,6 @@
 import re
 from langgraph.graph import StateGraph, START, END, message
-from typing import TypedDict, Literal, Sequence, Annotated, Optional
+from typing import TypedDict, Literal, Sequence, Annotated, Optional, Any, cast
 from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
@@ -19,6 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from datetime import datetime
 from langchain_core.documents import Document
 from libs.logger import get_logger
+from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
 import os
 
 
@@ -100,17 +101,15 @@ def product_lookup(state: AgentState):
             }
         ).to_list()
 
-        # Process regex search results: remove embeddings from each dictionary
+        # Process regex search results: remove embeddings and convert ObjectId to string
         processed_regex_results = []
         for doc_dict in result:
-            if "embedding" in doc_dict:
-                doc_dict_copy = (
-                    doc_dict.copy()
-                )  # Create a copy to avoid modifying original
+            doc_dict_copy = doc_dict.copy()
+            if "embedding" in doc_dict_copy:
                 del doc_dict_copy["embedding"]
-                processed_regex_results.append(doc_dict_copy)
-            else:
-                processed_regex_results.append(doc_dict)
+            if "_id" in doc_dict_copy:
+                doc_dict_copy["_id"] = str(doc_dict_copy["_id"])
+            processed_regex_results.append(doc_dict_copy)
 
         if len(processed_regex_results) > 0:
             state["product_info"] = processed_regex_results
@@ -237,11 +236,21 @@ builder.add_conditional_edges(
 )
 builder.add_edge("product_lookup", "call_llm")
 
-graph = builder.compile()
-
 
 # ---------- usage ----------
 async def chat_agent(thread_id: str, message: str):
+    # Ensure database client is connected for other operations if needed
+    await Database.connect()
+    if Database.client is None:
+        raise Exception("Database client failed to connect.")
+    # Cast Database.client to Any to satisfy type checker
+    checkpointer = AsyncMongoDBSaver(
+        client=cast(Any, Database.client),
+        db_name=Database.database_name,
+        checkpoint_collection_name="checkpointer",
+    )
+    graph = builder.compile(checkpointer=checkpointer)
+
     try:
         logger.info(
             f"chat_agent: Invoking agent for thread_id: {thread_id}, message: {message}"
@@ -252,7 +261,10 @@ async def chat_agent(thread_id: str, message: str):
             "llm_response": None,
             "product_info": None,
         }
-        final_state = graph.invoke(initial_state, config={"recursion_limit": 5})
+        final_state = await graph.ainvoke(
+            initial_state,
+            config={"recursion_limit": 5, "configurable": {"thread_id": thread_id}},
+        )
         final_content = final_state["messages"][-1].content
         logger.warning(
             f"chat_agent: Agent invocation successful. Response: {final_content}"

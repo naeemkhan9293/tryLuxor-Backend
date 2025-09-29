@@ -1,5 +1,4 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import MongoClient
+from pymongo import AsyncMongoClient, MongoClient
 from typing import Optional
 from libs.logger import get_logger
 from dotenv import load_dotenv
@@ -12,14 +11,14 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
 
 class Database:
-    client: Optional[AsyncIOMotorClient] = None
+    client: Optional[AsyncMongoClient] = None
     database_name: str = "tryLuxor"
 
     @classmethod
     async def connect(cls):
         if cls.client is None:
             try:
-                cls.client = AsyncIOMotorClient(MONGO_URI)
+                cls.client = AsyncMongoClient(MONGO_URI)
                 await cls.client.admin.command("ping")  # Test connection
                 logger.info("Successfully connected to MongoDB.")
             except Exception as e:
@@ -30,7 +29,7 @@ class Database:
     @classmethod
     async def disconnect(cls):
         if cls.client:
-            cls.client.close()
+            await cls.client.close()
             cls.client = None
             print("Disconnected from MongoDB.")
 
@@ -47,7 +46,6 @@ class Database:
 
     @classmethod
     def get_sync_collection(cls, collection_name: str):
-        # Ensure a synchronous client is used for synchronous operations
-        sync_client = MongoClient(MONGO_URI)
-        db = sync_client[cls.database_name]
+        client = MongoClient(MONGO_URI)
+        db = client[cls.database_name]
         return db[collection_name]
