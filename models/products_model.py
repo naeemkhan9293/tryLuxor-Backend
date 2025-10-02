@@ -34,7 +34,7 @@ class Manufacturer(BaseModel):
 
 
 class Product(BaseModel):
-    id: int
+    id: str
     sku: str
     name: str
     description: str | None = None

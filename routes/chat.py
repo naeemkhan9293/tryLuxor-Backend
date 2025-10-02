@@ -23,10 +23,13 @@ async def chat_endpoint(chat: ChatRequest):
 
 @router.post("/{thread_id}", tags=["chat"])
 async def chat_with_thread_id(thread_id: str, chat: ChatRequest):
-    result = await chat_agent(thread_id=thread_id, message=chat.message)
-    return JSONResponse(
-        content={
-            "message": result,
-            "thread_id": thread_id,
-        }
-    )
+    try:
+        result = await chat_agent(thread_id=thread_id, message=chat.message)
+        return JSONResponse(
+            content={
+                "message": result,
+                "thread_id": thread_id,
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str("Internal Server Error"))
