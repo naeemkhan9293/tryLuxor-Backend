@@ -8,8 +8,6 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from langchain_core.tools import tool
-from langchain.agents import ToolNode
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from libs.database import Database
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
@@ -45,8 +43,8 @@ def product_lookup(state: AgentState):
     logger.info("product_lookup: Looking up products")
     """Search products in MongoDB by vector or regex."""
     try:
-        # query = state.get("query")
-        query = "sofa"
+        query = state.get("query")
+        logger.info(f"product_lookup: Query: {query}")
         if query is None:
             state["product_info"] = "No Product found"
             return {
@@ -184,7 +182,7 @@ def call_llm(state: AgentState) -> AgentState:
                 ),
             )
         )
-        # print(llm_response)
+        print(f"checking llm response: {llm_response}")
         return {
             "messages": [
                 AIMessage(content=llm_response)
@@ -200,40 +198,63 @@ def call_llm(state: AgentState) -> AgentState:
 
 def should_continue(
     state: AgentState,
-) -> Literal["product_lookup", "call_llm", "__end__"]:
+) -> Literal["extract_query_from_llm_response", "call_llm", "__end__"]:
     logger.info("should_continue: Checking if LLM wants to call a tool")
     messages = state["messages"]
     last_message = messages[-1]
     logger.debug(f"should_continue: Last message: {last_message}")
     if isinstance(last_message, AIMessage):
-        llm_response_content = str(last_message.content)  # Convert to string
+        llm_response_content = str(last_message.content)
+        tool_call_pattern = r"TOOL_CALL: product_lookup\(query=\"(.*?)\"\)"
+        match = re.search(tool_call_pattern, llm_response_content)
+        if match:
+            return "extract_query_from_llm_response"
+        else:
+            return "__end__"
+    elif isinstance(last_message, ToolMessage):
+        return "call_llm"
+
+    return "__end__"
+
+
+def extract_query_from_llm_response(state: AgentState) -> AgentState:
+    logger.info("extract_query_from_llm_response: Extracting query from LLM response")
+    messages = state["messages"]
+    last_message = messages[-1]
+    updated_state = state.copy()  # Create a mutable copy of the state
+    if isinstance(last_message, AIMessage):
+        llm_response_content = str(last_message.content)
         tool_call_pattern = r"TOOL_CALL: product_lookup\(query=\"(.*?)\"\)"
         match = re.search(tool_call_pattern, llm_response_content)
         if match:
             query = match.group(1)
-            state["query"] = query
-            return "product_lookup"
-        else:
-            return "__end__"  # LLM responded without a tool call, so end.
-    elif isinstance(last_message, ToolMessage):
-        return "call_llm"  # Tool just ran, call LLM to summarize/respond
-
-    return "__end__"  # Default to end if unexpected message type
+            logger.info(f"extract_query_from_llm_response: Extracted query: {query}")
+            updated_state["query"] = query
+            return updated_state
+    logger.warning(
+        "extract_query_from_llm_response: No query extracted or last message not AIMessage."
+    )
+    updated_state["query"] = None  # Ensure query is explicitly set to None if not found
+    return updated_state
 
 
 builder = StateGraph(AgentState)
 
 builder.add_node("call_llm", call_llm)
-builder.add_node(
-    "product_lookup", product_lookup
-)  # Directly add the function as a node
+builder.add_node("product_lookup", product_lookup)
+builder.add_node("extract_query_from_llm_response", extract_query_from_llm_response)
 
 builder.add_edge(START, "call_llm")
 builder.add_conditional_edges(
     "call_llm",
     should_continue,
-    {"product_lookup": "product_lookup", "call_llm": "call_llm", "__end__": END},
+    {
+        "extract_query_from_llm_response": "extract_query_from_llm_response",
+        "call_llm": "call_llm",
+        "__end__": END,
+    },
 )
+builder.add_edge("extract_query_from_llm_response", "product_lookup")
 builder.add_edge("product_lookup", "call_llm")
 
 
