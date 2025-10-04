@@ -18,6 +18,7 @@ from datetime import datetime
 from langchain_core.documents import Document
 from libs.logger import get_logger
 from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
+from agents.instructions import GENZ_AGENT_INSTRUCTIONS
 import os
 
 
@@ -151,23 +152,7 @@ def call_llm(state: AgentState) -> AgentState:
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prompt = ChatPromptTemplate(
             [
-                SystemMessage(
-                    content="""
-                    `You are a helpful E-commerce Chatbot Agent for a furniture store.
-                    IMPORTANT: You have access to a tool called `product_lookup`. When a customer asks about furniture items, you MUST use this tool.
-
-                    To use the `product_lookup` tool, your response MUST be in the format:
-                    TOOL_CALL: product_lookup(query="<customer_query_here>")
-
-                    For example, if the user asks "Do you have chairs?", you should respond with:
-                    TOOL_CALL: product_lookup(query="chairs")
-
-                    If the tool returns results, provide helpful details about the furniture items.
-                    If it returns an error or no results, acknowledge this and offer to help in other ways.
-                    If the database appears to be empty, let the customer know that inventory might be being updated.
-
-                    Current time: {time}`"""
-                ),
+                SystemMessage(content=GENZ_AGENT_INSTRUCTIONS),
                 MessagesPlaceholder("messages"),
                 MessagesPlaceholder("agent_scratchpad"),
             ]
