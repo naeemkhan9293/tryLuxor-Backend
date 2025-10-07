@@ -280,4 +280,4 @@ async def chat_agent(thread_id: str, message: str):
         logger.error(
             f"chat_agent: An error occurred during agent invocation for thread_id {thread_id}: {e}"
         )
-        return f"An error occurred while processing your request: {e}"
+        raise e
