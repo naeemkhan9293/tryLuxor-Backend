@@ -16,7 +16,7 @@ async def chat_endpoint(chat: ChatRequest):
     try:
         thread_id = str(uuid.uuid4())
         result = await chat_agent(thread_id=thread_id, message=chat.message)
-        return JSONResponse(content={"payload": result, "thread_id": thread_id})
+        return JSONResponse(content={"message": result, "thread_id": thread_id})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

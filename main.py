@@ -1,9 +1,9 @@
 import uvicorn
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
-
 from fastapi import FastAPI, HTTPException
 from starlette.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from routes import chat
 from libs.database import Database
@@ -25,6 +25,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(debug=True, lifespan=lifespan)
+
+
+origins = ["http://localhost:3000", "https://try-luxor-frontend.vercel.app"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
