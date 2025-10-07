@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from routes import chat
+from routes import admin
 from libs.database import Database
 from libs.logger import get_logger
 from routes.product import router as product_router
@@ -59,3 +60,4 @@ async def seed_db():
 
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(product_router, prefix="/products", tags=["products"])
+app.include_router(admin.router, prefix="/admin", tags=["admin"])
