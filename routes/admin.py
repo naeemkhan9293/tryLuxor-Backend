@@ -20,8 +20,6 @@ embeddings = GoogleGenerativeAIEmbeddings(
 @router.post("/products")
 async def create_product(product: Product):
     try:
-        collection = Database.get_collection("products")
-        
         product_summary = await create_product_summary(product)
         
         document = Document(
