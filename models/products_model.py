@@ -63,4 +63,4 @@ class Product(BaseModel):
 
 
 class ProductsList(RootModel[List[Product]]):
-    pass
+    ...

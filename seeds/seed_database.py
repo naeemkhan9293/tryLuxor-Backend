@@ -185,7 +185,8 @@ async def seed_database():
 
         records_with_summary = [
             Document(
-                page_content=await create_product_summary(product), metadata=product.model_dump()
+                page_content=await create_product_summary(product),
+                metadata=product.model_dump(),
             )
             for product in synthetic_data
         ]

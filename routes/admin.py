@@ -9,6 +9,9 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 import os
 from pydantic import SecretStr
 from bson import ObjectId
+from libs.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -46,20 +49,15 @@ async def create_product(product: Product):
 async def update_product(product_id: str, product: Product):
     try:
         sync_collection = Database.get_sync_collection("products")
-
         # Find the document's _id to delete it
-        doc_to_delete = sync_collection.find_one({"metadata.id": product_id})
+        doc_to_delete = sync_collection.find_one({"_id": ObjectId(product_id)})
         if not doc_to_delete:
             raise HTTPException(status_code=404, detail="Product not found")
-
         # Delete the old document
-        sync_collection.delete_one({"_id": doc_to_delete["_id"]})
-
+        sync_collection.delete_one({"_id": ObjectId(doc_to_delete["_id"])})
         # Now, create and add the new document
         product_summary = await create_product_summary(product)
-
         document = Document(page_content=product_summary, metadata=product.model_dump())
-
         vector_store = MongoDBAtlasVectorSearch(
             collection=sync_collection, embedding=embeddings, index_name="vector_index"
         )
@@ -80,10 +78,8 @@ async def update_product(product_id: str, product: Product):
 async def delete_product(product_id: str):
     try:
         collection = Database.get_collection("products")
-        print(product_id)
         # Find the document's _id to delete it
         doc_to_delete = await collection.find_one({"_id": ObjectId(product_id)})
-        print(doc_to_delete)
         if not doc_to_delete:
             raise HTTPException(status_code=404, detail="Product not found")
 
