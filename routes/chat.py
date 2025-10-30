@@ -1,10 +1,12 @@
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from starlette.responses import JSONResponse
 from agents.chat_agent import chat_agent
 import uuid
+from libs.logger import get_logger
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -18,7 +20,8 @@ async def chat_endpoint(chat: ChatRequest):
         result = await chat_agent(thread_id=thread_id, message=chat.message)
         return JSONResponse(content={"message": result, "thread_id": thread_id})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(e)
+        raise HTTPException(status_code=500, detail=str("Internal Server Error"))
 
 
 @router.post("/{thread_id}", tags=["chat"])
@@ -32,4 +35,5 @@ async def chat_with_thread_id(thread_id: str, chat: ChatRequest):
             }
         )
     except Exception as e:
+        logger.error(e)
         raise HTTPException(status_code=500, detail=str("Internal Server Error"))

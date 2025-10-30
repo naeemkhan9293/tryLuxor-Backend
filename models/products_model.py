@@ -1,16 +1,20 @@
-from pydantic import BaseModel, RootModel
+from pydantic import BaseModel, RootModel, Field
 from typing import List
-
+from datetime import datetime, timezone
 
 class Review(BaseModel):
+    """A customer review for the product."""
+
     user_id: int
     rating: float
     comment: str
-    created_at: str
-    updated_at: str | None = None
+    created_at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Variant(BaseModel):
+    """A specific variant of the product (e.g., Size, Color)."""
+
     sku: str
     name: str
     additional_price: float | None = None
@@ -18,6 +22,8 @@ class Variant(BaseModel):
 
 
 class Price(BaseModel):
+    """Pricing information for the product."""
+
     amount: float
     currency: str = "USD"
     discount_percentage: float | None = None
@@ -25,6 +31,8 @@ class Price(BaseModel):
 
 
 class Manufacturer(BaseModel):
+    """Information about the product's manufacturer."""
+
     name: str | None = None
     address: str | None = None
     country: str | None = None
@@ -34,6 +42,8 @@ class Manufacturer(BaseModel):
 
 
 class Product(BaseModel):
+    """The main product catalog model with automatic timestamps."""
+
     id: str
     sku: str
     name: str
@@ -42,7 +52,7 @@ class Product(BaseModel):
     brand: str | None = None
 
     price: Price
-    stock_quantity: int = 0
+    stock_quantity: int = 1
     in_stock: bool = True
 
     images: list[str] = []
@@ -58,9 +68,11 @@ class Product(BaseModel):
     weight: float | None = None
     dimensions: dict | None = None
 
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ProductsList(RootModel[List[Product]]):
+    """A list wrapper for multiple products."""
+
     ...

@@ -4,7 +4,7 @@ from libs.database import Database
 from models.products_model import Product
 from seeds.seed_database import create_product_summary
 from langchain_core.documents import Document
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
 from langchain_mongodb import MongoDBAtlasVectorSearch
 import os
 from pydantic import SecretStr
@@ -19,6 +19,7 @@ api_key = SecretStr(str(os.getenv("GOOGLE_API_KEY")))
 embeddings = GoogleGenerativeAIEmbeddings(
     model="text-embedding-004", google_api_key=api_key
 )
+llm = GoogleGenerativeAI(model="gemini-2.5-pro", google_api_key=api_key)
 
 
 @router.post("/products")
@@ -77,7 +78,7 @@ async def update_product(product_id: str, product: Product):
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str):
     try:
-        collection = Database.get_collection("products")
+        collection = await Database.get_async_collection("products")
         # Find the document's _id to delete it
         doc_to_delete = await collection.find_one({"_id": ObjectId(product_id)})
         if not doc_to_delete:

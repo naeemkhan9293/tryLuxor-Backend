@@ -1,4 +1,3 @@
-import uvicorn
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException

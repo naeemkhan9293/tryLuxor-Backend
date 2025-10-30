@@ -9,7 +9,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_mongodb import MongoDBAtlasVectorSearch
-from libs.database import Database
+from libs.database import Database, settings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, GoogleGenerativeAI
 from dotenv import load_dotenv
 from pydantic import SecretStr
@@ -247,12 +247,12 @@ builder.add_edge("product_lookup", "call_llm")
 async def chat_agent(thread_id: str, message: str):
     # Ensure database client is connected for other operations if needed
     await Database.connect()
-    if Database.client is None:
+    if Database._async_client is None:
         raise Exception("Database client failed to connect.")
     # Cast Database.client to Any to satisfy type checker
     checkpointer = AsyncMongoDBSaver(
-        client=cast(Any, Database.client),
-        db_name=Database.database_name,
+        client=cast(Any, Database._async_client),
+        db_name=settings.database_name,
         checkpoint_collection_name="checkpointer",
     )
     graph = builder.compile(checkpointer=checkpointer)
